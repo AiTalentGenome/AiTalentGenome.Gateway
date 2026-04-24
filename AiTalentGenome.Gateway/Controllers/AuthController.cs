@@ -16,30 +16,24 @@ public class AuthController(IdentityService.IdentityServiceClient identityClient
     {
         try
         {
-            // 1. Вызов микросервиса Identity по gRPC
-            var response = await _identityClient.ExchangeHhCodeAsync(new ExchangeHhCodeRequest 
-            { 
-                Code = request.Code 
-            });
-
-            if (!response.IsActive)
+            var response = await _identityClient.ExchangeHhCodeAsync(new ExchangeHhCodeRequest { Code = request.Code });
+            
+            if (response.IsActive && !string.IsNullOrEmpty(response.AccessToken))
             {
-                return StatusCode(403, new { error = response.ErrorMessage });
+                SetAuthCookie(response.AccessToken);
+            }
+            
+            return Ok(response);
+        }
+        catch (RpcException ex)
+        {
+            // Если код уже использован, прилетит StatusCode.InvalidArgument
+            if (ex.StatusCode == Grpc.Core.StatusCode.InvalidArgument)
+            {
+                return BadRequest(new { error = ex.Status.Detail });
             }
 
-            // 2. Установка защищенной куки
-            SetAuthCookie(response.AccessToken);
-
-            return Ok(new 
-            { 
-                message = "Авторизация прошла успешно", 
-                user = response.User 
-            });
-        }
-        catch (Exception ex)
-        {
-            // Здесь можно добавить логгирование
-            return BadRequest(new { error = "Ошибка при обмене кода: " + ex.Message });
+            return StatusCode(500, new { error = "Ошибка сервиса идентификации" });
         }
     }
 
@@ -75,11 +69,15 @@ public class AuthController(IdentityService.IdentityServiceClient identityClient
 
     private void SetAuthCookie(string accessToken)
     {
+        var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
         var cookieOptions = new CookieOptions
         {
-            HttpOnly = true,    // Защита от XSS
-            Secure = true,      // Только через HTTPS
-            SameSite = SameSiteMode.Strict, // Защита от CSRF
+            HttpOnly = true,
+            // ИСПРАВЛЕНИЕ: на локохосте Secure должен быть false
+            Secure = !isDevelopment, 
+            // ИСПРАВЛЕНИЕ: для разработки лучше использовать Lax, 
+            // чтобы кука стабильнее передавалась между портами 8000 и 5000
+            SameSite = isDevelopment ? SameSiteMode.Lax : SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddDays(7),
             Path = "/"
         };
