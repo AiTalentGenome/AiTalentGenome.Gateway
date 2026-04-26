@@ -1,4 +1,5 @@
 ﻿using AiTalentGenome.Contracts.Identity;
+using AiTalentGenome.Contracts.Vacancies;
 
 namespace AiTalentGenome.Gateway.DependencyInjection;
 
@@ -26,8 +27,24 @@ public static class GrpcClientServices
                 };
             });
 
-        // Сюда в будущем добавим:
-        // services.AddGrpcClient<AnalysisService.AnalysisServiceClient>(...);
+        services.AddGrpcClient<VacancyService.VacancyServiceClient>(options =>
+            {
+                var identityUrl = configuration["Services:VacancyUrl"] 
+                                  ?? throw new InvalidOperationException("IdentityUrl is not configured");
+            
+                options.Address = new Uri(identityUrl);
+            })
+            .ConfigureChannel(options =>
+            {
+                // В .NET 10 можно настроить более агрессивный Keep-Alive для долгоживущих gRPC соединений
+                options.HttpHandler = new SocketsHttpHandler
+                {
+                    PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+                    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+                    KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+                    EnableMultipleHttp2Connections = true
+                };
+            });
 
         return services;
     }
