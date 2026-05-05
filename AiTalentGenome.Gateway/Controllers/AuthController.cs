@@ -1,5 +1,6 @@
 ﻿// AiTalentGenome.Gateway/Controllers/AuthController.cs
 using AiTalentGenome.Contracts.Identity;
+using AiTalentGenome.Gateway.DTOs.Requests;
 using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 
@@ -85,5 +86,3 @@ public class AuthController(IdentityService.IdentityServiceClient identityClient
         Response.Cookies.Append("hh_access_token", accessToken, cookieOptions);
     }
 }
-
-public record ExchangeRequest(string Code);

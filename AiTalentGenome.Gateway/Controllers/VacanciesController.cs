@@ -1,4 +1,5 @@
 ﻿using AiTalentGenome.Contracts.Vacancies;
+using AiTalentGenome.Gateway.DTOs.Requests;
 using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 
@@ -65,6 +66,54 @@ public class VacanciesController(VacancyService.VacancyServiceClient vacancyClie
         catch (RpcException ex)
         {
             return StatusCode(500, new { error = "Ошибка при получении вакансии", details = ex.Status.Detail });
+        }
+    }
+    
+    [HttpPost("{id}/sync-applications")]
+    public async Task<IActionResult> SyncApplications(string id)
+    {
+        // Извлекаем токен из куки
+        if (!Request.Cookies.TryGetValue("hh_access_token", out var token))
+        {
+            return Unauthorized(new { error = "Сессия отсутствует" });
+        }
+
+        try
+        {
+            var response = await vacancyClient.SyncApplicationsAsync(new SyncApplicationsRequest 
+            { 
+                VacancyId = id,
+                AccessToken = token 
+            });
+
+            return Ok(response);
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка синхронизации откликов", details = ex.Status.Detail });
+        }
+    }
+    
+    [HttpPost("{id}/candidates")]
+    public async Task<IActionResult> AddCandidate(string id, [FromBody] CreateCandidateRequest request)
+    {
+        try
+        {
+            var response = await vacancyClient.AddManualCandidateAsync(new AddManualCandidateRequest
+            {
+                VacancyId = id,
+                CandidateName = request.Name,
+                CandidateEmail = request.Email,
+                CandidatePhone = request.Phone,
+                ResumeUrl = request.ResumeUrl,
+                CoverLetter = request.CoverLetter
+            });
+
+            return Ok(response);
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка добавления кандидата", details = ex.Status.Detail });
         }
     }
 }
