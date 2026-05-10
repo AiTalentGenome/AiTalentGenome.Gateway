@@ -1,5 +1,7 @@
 ﻿using AiTalentGenome.Contracts.Vacancies;
 using AiTalentGenome.Gateway.DTOs.Requests;
+using AiTalentGenome.Gateway.DTOs.Responses;
+using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 
@@ -114,6 +116,69 @@ public class VacanciesController(VacancyService.VacancyServiceClient vacancyClie
         catch (RpcException ex)
         {
             return StatusCode(500, new { error = "Ошибка добавления кандидата", details = ex.Status.Detail });
+        }
+    }
+    
+    /// <summary>
+    /// Создание вакансии на основе загруженного файла (PDF/DOCX)
+    /// </summary>
+    [HttpPost("upload")]
+    public async Task<IActionResult> UploadVacancy(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "Файл не предоставлен" });
+
+        if (!Request.Cookies.TryGetValue("hh_access_token", out var token))
+            return Unauthorized(new { error = "Сессия отсутствует" });
+
+        try
+        {
+            // 1. Читаем файл в массив байт
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+
+            // 2. Вызываем VacancyService
+            var response = await vacancyClient.CreateVacancyFromFileAsync(new UploadFileRequest
+            {
+                FileContent = ByteString.CopyFrom(ms.ToArray()),
+                Extension = Path.GetExtension(file.FileName),
+                AccessToken = token
+            });
+
+            return Ok(response);
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка при парсинге вакансии", details = ex.Status.Detail });
+        }
+    }
+
+    /// <summary>
+    /// Добавление кандидата путем загрузки файла резюме
+    /// </summary>
+    [HttpPost("{id}/candidates/upload")]
+    public async Task<IActionResult> UploadCandidate(string id, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "Файл резюме не предоставлен" });
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+
+            var response = await vacancyClient.AddCandidateFromFileAsync(new UploadCandidateFileRequest
+            {
+                VacancyId = id,
+                FileContent = ByteString.CopyFrom(ms.ToArray()),
+                Extension = Path.GetExtension(file.FileName)
+            });
+
+            return Ok(response);
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка при обработке резюме", details = ex.Status.Detail });
         }
     }
 }

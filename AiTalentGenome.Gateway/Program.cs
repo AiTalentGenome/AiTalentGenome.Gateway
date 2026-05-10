@@ -19,6 +19,11 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // Например, 10 МБ
+});
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi(); 
 
