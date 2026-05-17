@@ -119,6 +119,65 @@ public class VacanciesController(VacancyService.VacancyServiceClient vacancyClie
         }
     }
     
+    // AiTalentGenome.Gateway/Controllers/VacanciesController.cs
+
+    [HttpGet("{id}/candidates")]
+    public async Task<IActionResult> GetCandidates(string id)
+    {
+        try
+        {
+            var response = await vacancyClient.GetApplicationsByVacancyAsync(new GetApplicationsRequest 
+            { 
+                VacancyId = id 
+            });
+
+            return Ok(response.Applications);
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка получения кандидатов", details = ex.Status.Detail });
+        }
+    }
+    
+    [HttpGet("{id}/candidates/paged")]
+    public async Task<IActionResult> GetPagedCandidates(
+        string id, 
+        [FromQuery] int page = 1, 
+        [FromQuery] int pageSize = 10,
+        [FromQuery] List<int>? statuses = null, // Принимаем числовые значения enum
+        [FromQuery] bool onlyAnalyzed = false)
+    {
+        try
+        {
+            var pagedRequest = new GetPagedApplicationsRequest 
+            { 
+                VacancyId = id,
+                Page = page,
+                PageSize = pageSize,
+                OnlyAnalyzed = onlyAnalyzed
+            };
+
+            if (statuses != null && statuses.Count > 0)
+            {
+                // Приводим инты к gRPC-типу контракта ApplicationStatus
+                pagedRequest.Statuses.AddRange(statuses.Select(s => (Contracts.Vacancies.ApplicationStatus)s));
+            }
+
+            var response = await vacancyClient.GetPagedApplicationsByVacancyAsync(pagedRequest);
+
+            // Возвращаем фронтенду объект со списком и метаданными
+            return Ok(new 
+            {
+                items = response.Applications,
+                totalCount = response.TotalCount
+            });
+        }
+        catch (RpcException ex)
+        {
+            return StatusCode(500, new { error = "Ошибка получения пагинированного списка кандидатов", details = ex.Status.Detail });
+        }
+    }
+    
     /// <summary>
     /// Создание вакансии на основе загруженного файла (PDF/DOCX)
     /// </summary>
